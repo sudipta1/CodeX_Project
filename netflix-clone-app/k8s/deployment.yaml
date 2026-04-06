@@ -52,15 +52,3 @@ spec:
                 secretKeyRef:
                   name: observability-secrets
                   key: elastic_api_key
-          readinessProbe:
-            httpGet:
-              path: /healthz
-              port: 3000
-            initialDelaySeconds: 5
-            periodSeconds: 10
-          livenessProbe:
-            httpGet:
-              path: /healthz
-              port: 3000
-            initialDelaySeconds: 15
-            periodSeconds: 20
