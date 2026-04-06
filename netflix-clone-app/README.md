@@ -1,89 +1,99 @@
-# Netflix Clone App (Docker + AKS Ready)
+# Netflix Clone App (AKS-ready with Grafana + ELK + OpenTelemetry)
 
-A lightweight Netflix-style clone built with Node.js + Express + vanilla frontend.
+A Netflix-style app built with Node.js/Express and integrated observability:
 
-## Features
+- **Metrics** via Prometheus endpoint (`/metrics`)
+- **Traces** via OpenTelemetry OTLP exporter
+- **Logs** via structured JSON + Elastic Cloud indexing
 
-- Hero banner and responsive Netflix-like layout
-- Dynamic movie/content cards loaded from backend API
-- Health endpoint for container orchestration (`/healthz`)
-- Dockerized for local deployment
-- Kubernetes manifests included for AKS deployment
-
-## Project Structure
-
-```text
-netflix-clone-app/
-├── public/
-│   ├── app.js
-│   ├── index.html
-│   └── styles.css
-├── k8s/
-│   ├── deployment.yaml
-│   └── service.yaml
-├── Dockerfile
-├── docker-compose.yml
-├── package.json
-└── server.js
-```
-
-## Run Locally (without Docker)
+## Quick Start (No Docker build required)
 
 ```bash
 npm install
 npm start
 ```
 
-Open: `http://localhost:3000`
+Open `http://localhost:3000`.
 
-## Run with Docker (local system)
+## Observability environment variables
 
-### 1) Build image
-
-```bash
-docker build -t netflix-clone-app:latest .
-```
-
-### 2) Run container
+Set these before starting the app:
 
 ```bash
-docker run -d --name netflix-clone -p 3000:3000 netflix-clone-app:latest
+export OTEL_SERVICE_NAME=netflix-clone-app
+export OTEL_ENVIRONMENT=local
+export OTEL_EXPORTER_OTLP_TRACES_ENDPOINT=<grafana-or-elastic-otlp-endpoint>
+export OTEL_EXPORTER_OTLP_HEADERS="Authorization=Bearer <otlp-token>"
+
+export ELASTIC_NODE=<https://your-deployment.es.region.aws.elastic-cloud.com>
+export ELASTIC_API_KEY=<elastic-api-key>
+export ELASTIC_LOG_INDEX=netflix-clone-logs
 ```
 
-Open: `http://localhost:3000`
+## Endpoints
 
-### 3) Using Docker Compose
+- `GET /` - UI
+- `GET /api/content` - sample catalog API
+- `GET /healthz` - health check
+- `GET /metrics` - Prometheus metrics
+
+## Grafana + ELK + OTel integration details
+
+### 1) Traces (OpenTelemetry)
+
+- Application telemetry bootstrap is in `telemetry.js`.
+- By default, traces are exported via OTLP HTTP.
+- For multi-destination trace fanout (Grafana Cloud + Elastic), use OTel Collector config in:
+  - `observability/otel-collector-config.yaml`
+
+### 2) Metrics (Prometheus)
+
+- Custom metrics are created in `server.js`:
+  - `http_requests_total`
+  - `http_request_duration_seconds`
+- Prometheus scrape config file:
+  - `observability/prometheus.yml`
+
+### 3) Logs (Elastic Cloud / ELK)
+
+- Logging is handled by `logger.js`.
+- App logs are written to stdout and optionally indexed to Elastic Cloud when `ELASTIC_NODE` + `ELASTIC_API_KEY` are set.
+- Each log includes `trace_id` for correlation with distributed traces.
+
+## Optional local observability containers
+
+You can run local Prometheus + OTel Collector:
 
 ```bash
-docker compose up -d --build
+docker compose -f docker-compose.observability.yml up -d
 ```
 
-## Deploy to AKS (later)
+## AKS deployment
 
-1. Build and push image to ACR:
+1. Build image in ACR (remote build, no local Docker needed):
 
 ```bash
-az acr login --name <ACR_NAME>
-docker tag netflix-clone-app:latest <ACR_NAME>.azurecr.io/netflix-clone-app:latest
-docker push <ACR_NAME>.azurecr.io/netflix-clone-app:latest
+export ACR_NAME=<your-acr-name>
+az acr build --registry $ACR_NAME --image netflix-clone-app:latest .
 ```
 
-2. Update image in `k8s/deployment.yaml` if needed.
+2. Create Kubernetes secret (replace placeholders):
 
-3. Apply manifests:
+```bash
+kubectl create secret generic observability-secrets \
+  --from-literal=otlp_traces_endpoint='<otlp-endpoint>' \
+  --from-literal=otlp_headers='Authorization=Bearer <token>' \
+  --from-literal=elastic_node='<elastic-url>' \
+  --from-literal=elastic_api_key='<elastic-api-key>'
+```
+
+3. Deploy:
 
 ```bash
 kubectl apply -f k8s/deployment.yaml
 kubectl apply -f k8s/service.yaml
 ```
 
-4. Get external IP:
+4. See roadmap:
 
-```bash
-kubectl get svc netflix-clone-service
-```
-
-## Notes
-
-- If your environment blocks `npm` registry access, build in an environment with npm access.
-- The app listens on `PORT` env variable (default: `3000`).
+- `OBSERVABILITY_ROADMAP.md`

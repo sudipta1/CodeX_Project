@@ -1,0 +1,27 @@
+receivers:
+  otlp:
+    protocols:
+      grpc:
+      http:
+
+processors:
+  batch:
+
+exporters:
+  debug:
+    verbosity: basic
+  otlphttp/grafana:
+    endpoint: ${GRAFANA_OTLP_ENDPOINT}
+    headers:
+      Authorization: ${GRAFANA_OTLP_AUTH}
+  otlphttp/elastic:
+    endpoint: ${ELASTIC_OTLP_ENDPOINT}
+    headers:
+      Authorization: ApiKey ${ELASTIC_OTLP_API_KEY}
+
+service:
+  pipelines:
+    traces:
+      receivers: [otlp]
+      processors: [batch]
+      exporters: [debug, otlphttp/grafana, otlphttp/elastic]

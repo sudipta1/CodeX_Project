@@ -1,8 +1,33 @@
+'use strict';
+
 const express = require('express');
 const path = require('path');
+const client = require('prom-client');
+
+const { startTelemetry, shutdownTelemetry } = require('./telemetry');
+const { writeLog } = require('./logger');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
+
+const register = new client.Registry();
+client.collectDefaultMetrics({ register });
+
+const httpRequestsTotal = new client.Counter({
+  name: 'http_requests_total',
+  help: 'Total HTTP requests',
+  labelNames: ['method', 'route', 'status_code']
+});
+
+const httpRequestDurationSeconds = new client.Histogram({
+  name: 'http_request_duration_seconds',
+  help: 'HTTP request duration in seconds',
+  labelNames: ['method', 'route', 'status_code'],
+  buckets: [0.05, 0.1, 0.2, 0.5, 1, 2, 5]
+});
+
+register.registerMetric(httpRequestsTotal);
+register.registerMetric(httpRequestDurationSeconds);
 
 const contentCatalog = [
   {
@@ -61,6 +86,28 @@ const contentCatalog = [
   }
 ];
 
+app.use((req, res, next) => {
+  const endTimer = httpRequestDurationSeconds.startTimer();
+  res.on('finish', () => {
+    const route = req.route ? req.route.path : req.path;
+    const labels = {
+      method: req.method,
+      route,
+      status_code: res.statusCode
+    };
+
+    httpRequestsTotal.inc(labels);
+    endTimer(labels);
+    writeLog('info', 'HTTP request completed', {
+      method: req.method,
+      route,
+      statusCode: res.statusCode
+    });
+  });
+
+  next();
+});
+
 app.use(express.static(path.join(__dirname, 'public')));
 
 app.get('/api/content', (_req, res) => {
@@ -71,6 +118,28 @@ app.get('/healthz', (_req, res) => {
   res.status(200).json({ status: 'ok' });
 });
 
-app.listen(PORT, () => {
-  console.log(`Netflix clone app running on port ${PORT}`);
+app.get('/metrics', async (_req, res) => {
+  res.set('Content-Type', register.contentType);
+  res.end(await register.metrics());
 });
+
+async function startServer() {
+  await startTelemetry();
+  app.listen(PORT, async () => {
+    await writeLog('info', `Netflix clone app running on port ${PORT}`);
+  });
+}
+
+startServer().catch(async (error) => {
+  await writeLog('error', 'Failed to start server', { err: error.message });
+  process.exit(1);
+});
+
+async function gracefulShutdown(signal) {
+  await writeLog('info', `Received ${signal}; shutting down...`);
+  await shutdownTelemetry();
+  process.exit(0);
+}
+
+process.on('SIGINT', () => gracefulShutdown('SIGINT'));
+process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));

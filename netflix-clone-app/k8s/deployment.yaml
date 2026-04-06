@@ -13,21 +13,42 @@ spec:
     metadata:
       labels:
         app: netflix-clone
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "3000"
+        prometheus.io/path: "/metrics"
     spec:
       containers:
         - name: netflix-clone
           image: <ACR_NAME>.azurecr.io/netflix-clone-app:latest
           ports:
             - containerPort: 3000
-          readinessProbe:
-            httpGet:
-              path: /healthz
-              port: 3000
-            initialDelaySeconds: 5
-            periodSeconds: 10
-          livenessProbe:
-            httpGet:
-              path: /healthz
-              port: 3000
-            initialDelaySeconds: 15
-            periodSeconds: 20
+          env:
+            - name: PORT
+              value: "3000"
+            - name: NODE_ENV
+              value: "production"
+            - name: OTEL_SERVICE_NAME
+              value: "netflix-clone-app"
+            - name: OTEL_ENVIRONMENT
+              value: "aks"
+            - name: OTEL_EXPORTER_OTLP_TRACES_ENDPOINT
+              valueFrom:
+                secretKeyRef:
+                  name: observability-secrets
+                  key: otlp_traces_endpoint
+            - name: OTEL_EXPORTER_OTLP_HEADERS
+              valueFrom:
+                secretKeyRef:
+                  name: observability-secrets
+                  key: otlp_headers
+            - name: ELASTIC_NODE
+              valueFrom:
+                secretKeyRef:
+                  name: observability-secrets
+                  key: elastic_node
+            - name: ELASTIC_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: observability-secrets
+                  key: elastic_api_key
