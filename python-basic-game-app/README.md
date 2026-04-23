@@ -6,8 +6,8 @@ A simple **Guess The Number** game built with Flask, containerized with Docker, 
 
 - Browser-based Python game
 - Health endpoint for Kubernetes probes (`/healthz`)
-- Dockerized runtime using Gunicorn
-- Kubernetes manifests for Deployment, Service, and Ingress
+- OpenTelemetry metrics exported for Prometheus at `:9464/metrics`
+- Tracks request count (`game_http_requests_total`) and latency (`game_http_request_duration_ms`)
 
 ## Run locally
 
@@ -19,14 +19,16 @@ pip install -r requirements.txt
 python app.py
 ```
 
-Open `http://localhost:5000`.
+Open `http://localhost:5000` for the game.
+
+Check metrics at `http://localhost:9464/metrics`.
 
 ## Run with Docker
 
 ```bash
 cd python-basic-game-app
 docker build -t python-game-app:latest .
-docker run --rm -p 5000:5000 -e FLASK_SECRET_KEY=dev-secret python-game-app:latest
+docker run --rm -p 5000:5000 -p 9464:9464 -e FLASK_SECRET_KEY=dev-secret python-game-app:latest
 ```
 
 ## Deploy to Kubernetes
@@ -62,8 +64,15 @@ kubectl get svc
 kubectl get ingress
 ```
 
+6. Verify metrics are exposed from pod annotations in your Prometheus setup and query:
+
+- `game_http_requests_total`
+- `game_http_request_duration_ms`
+
 ## Configurable environment variables
 
 - `FLASK_SECRET_KEY` (required for production)
 - `MAX_NUMBER` (default: `20`)
 - `MAX_ATTEMPTS` (default: `6`)
+- `OTEL_EXPORTER_PROMETHEUS_HOST` (default: `0.0.0.0`)
+- `OTEL_EXPORTER_PROMETHEUS_PORT` (default: `9464`)

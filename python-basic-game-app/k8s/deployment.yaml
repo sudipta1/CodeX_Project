@@ -13,13 +13,20 @@ spec:
     metadata:
       labels:
         app: python-game-app
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/path: /metrics
+        prometheus.io/port: "9464"
     spec:
       containers:
         - name: python-game-app
           image: your-registry/python-game-app:latest
           imagePullPolicy: IfNotPresent
           ports:
-            - containerPort: 5000
+            - name: http
+              containerPort: 5000
+            - name: otel-metrics
+              containerPort: 9464
           env:
             - name: FLASK_SECRET_KEY
               valueFrom:
@@ -30,6 +37,10 @@ spec:
               value: "20"
             - name: MAX_ATTEMPTS
               value: "6"
+            - name: OTEL_EXPORTER_PROMETHEUS_HOST
+              value: "0.0.0.0"
+            - name: OTEL_EXPORTER_PROMETHEUS_PORT
+              value: "9464"
           readinessProbe:
             httpGet:
               path: /healthz

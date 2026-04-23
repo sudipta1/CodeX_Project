@@ -2,19 +2,67 @@ from __future__ import annotations
 
 import os
 import random
-from flask import Flask, redirect, render_template, request, session, url_for
+import time
+from flask import Flask, g, redirect, render_template, request, session, url_for
+from opentelemetry import metrics
+from opentelemetry.exporter.prometheus import PrometheusMetricReader
+from opentelemetry.sdk.metrics import MeterProvider
+from opentelemetry.sdk.resources import Resource
 
 app = Flask(__name__)
 app.secret_key = os.getenv("FLASK_SECRET_KEY", "change-me-in-production")
 
 MAX_NUMBER = int(os.getenv("MAX_NUMBER", "20"))
 MAX_ATTEMPTS = int(os.getenv("MAX_ATTEMPTS", "6"))
+METRICS_HOST = os.getenv("OTEL_EXPORTER_PROMETHEUS_HOST", "0.0.0.0")
+METRICS_PORT = int(os.getenv("OTEL_EXPORTER_PROMETHEUS_PORT", "9464"))
+
+
+def setup_metrics() -> tuple:
+    resource = Resource.create({"service.name": "python-basic-game-app"})
+    prometheus_reader = PrometheusMetricReader(host=METRICS_HOST, port=METRICS_PORT)
+    provider = MeterProvider(resource=resource, metric_readers=[prometheus_reader])
+    metrics.set_meter_provider(provider)
+
+    meter = metrics.get_meter("python-basic-game-app")
+    request_counter = meter.create_counter(
+        name="game_http_requests_total",
+        description="Total number of HTTP requests handled by the game app",
+    )
+    latency_histogram = meter.create_histogram(
+        name="game_http_request_duration_ms",
+        unit="ms",
+        description="Latency of HTTP requests in milliseconds",
+    )
+
+    return request_counter, latency_histogram
+
+
+REQUEST_COUNTER, LATENCY_HISTOGRAM = setup_metrics()
 
 
 def reset_game() -> None:
     session["target"] = random.randint(1, MAX_NUMBER)
     session["attempts"] = 0
     session["history"] = []
+
+
+@app.before_request
+def start_timer() -> None:
+    g.request_start = time.perf_counter()
+
+
+@app.after_request
+def record_metrics(response):
+    duration_ms = (time.perf_counter() - g.request_start) * 1000
+    attributes = {
+        "method": request.method,
+        "path": request.path,
+        "status_code": response.status_code,
+    }
+    REQUEST_COUNTER.add(1, attributes)
+    LATENCY_HISTOGRAM.record(duration_ms, attributes)
+    return response
 
 
 @app.route("/healthz", methods=["GET"])
