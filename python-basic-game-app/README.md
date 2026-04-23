@@ -8,8 +8,6 @@ A simple **Guess The Number** game built with Flask, containerized with Docker, 
 - Health endpoint for Kubernetes probes (`/healthz`)
 - OpenTelemetry metrics exported for Prometheus at `:9464/metrics`
 - Tracks request count (`game_http_requests_total`) and latency (`game_http_request_duration_ms`)
-- Dockerized runtime using Gunicorn
-- Kubernetes manifests for Deployment, Service, and Ingress
 
 ## Run locally
 
