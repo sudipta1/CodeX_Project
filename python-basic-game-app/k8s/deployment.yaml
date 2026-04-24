@@ -2,6 +2,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: python-game-app
+  namespace: gameapp
   labels:
     app: python-game-app
 spec:
@@ -20,7 +21,7 @@ spec:
     spec:
       containers:
         - name: python-game-app
-          image: your-registry/python-game-app:latest
+          image: sudipta244/pythonapp:v2
           imagePullPolicy: IfNotPresent
           ports:
             - name: http
