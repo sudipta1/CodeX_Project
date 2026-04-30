@@ -5,7 +5,7 @@ import random
 import time
 from flask import Flask, g, redirect, render_template, request, session, url_for
 from opentelemetry import metrics
-from opentelemetry.exporter.prometheus import PrometheusMetricReader
+from opentelemetry.exporter.prometheus import PrometheusMetricReader, start_http_server
 from opentelemetry.sdk.metrics import MeterProvider
 from opentelemetry.sdk.resources import Resource
 
@@ -20,9 +20,11 @@ METRICS_PORT = int(os.getenv("OTEL_EXPORTER_PROMETHEUS_PORT", "9464"))
 
 def setup_metrics() -> tuple:
     resource = Resource.create({"service.name": "python-basic-game-app"})
-    prometheus_reader = PrometheusMetricReader(host=METRICS_HOST, port=METRICS_PORT)
+    prometheus_reader = PrometheusMetricReader()
     provider = MeterProvider(resource=resource, metric_readers=[prometheus_reader])
     metrics.set_meter_provider(provider)
+
+    start_http_server(port=METRICS_PORT, addr=METRICS_HOST)
 
     meter = metrics.get_meter("python-basic-game-app")
     request_counter = meter.create_counter(
